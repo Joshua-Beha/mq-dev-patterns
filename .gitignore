@@ -16,4 +16,4 @@ amqp-vertx/target/*
 terraform.tfstate.*
 terraform.tfstate
 keys/*
-
+JMS/target/*
