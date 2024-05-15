@@ -1,5 +1,5 @@
 /*
-* (c) Copyright IBM Corporation 2019
+* (c) Copyright IBM Corporation 2019, 2024
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -17,14 +17,13 @@
 package com.ibm.mq.samples.jms;
 
 import java.util.logging.*;
-import org.json.simple.parser.ParseException;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.JSONObject;
-import org.json.simple.JSONArray;
-import java.io.FileReader;
+import org.json.JSONObject;
+import org.json.JSONArray;
+import org.json.JSONException;
 import java.io.IOException;
-import java.io.FileNotFoundException;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.lang.System;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,11 +35,22 @@ public class SampleEnvSetter {
 
     private static final String CCDT = "MQCCDTURL";
     private static final String FILEPREFIX = "file://";
+    private static final String ZOS = "z/os";
+    private static final int DEFAULT_MQI_PORT = 1414;
+
+    public static final String ENV_FILE = "EnvFile";
+    public static final String DEFAULT_ENV_FILE = "../env.json";    
+    public static final String DEFAULT_Z_ENV_FILE ="../env-zbindings.json";
 
     public SampleEnvSetter() {
         JSONObject mqEnvSettings = null;
+        mqEndPoints = null;  
+        File file = getEnvFile();
 
-        mqEndPoints = null;
+        if (null == file) {
+            logger.warning("No Environment settings file found");
+            return;
+        }
 
         try {
             JSONParser parser = new JSONParser();
@@ -48,11 +58,11 @@ public class SampleEnvSetter {
             Object data = parser.parse(new FileReader(envPath));
             logger.info("File read");
 
-            mqEnvSettings = (JSONObject) data;
+            logger.info("File read");
 
             if (mqEnvSettings != null) {
               logger.info("JSON Data Found");
-              mqEndPoints = (JSONArray) mqEnvSettings.get("MQ_ENDPOINTS");
+              mqEndPoints = (JSONArray) mqEnvSettings.getJSONArray("MQ_ENDPOINTS");
             }
 
             if (mqEndPoints == null || mqEndPoints.isEmpty()) {
@@ -61,25 +71,57 @@ public class SampleEnvSetter {
             } else {
                 logger.info("There is at least one MQ endpoint in the .json file");
             }
-
-        } catch (FileNotFoundException e) {
-            logger.warning(e.getMessage());
         } catch (IOException e) {
+            logger.warning("Error processing env.json file");
             logger.warning(e.getMessage());
-        } catch (ParseException e) {
-            logger.warning(e.getMessage());
+        } catch (JSONException e) {
+          logger.warning("Error parsing env.json file");
+          logger.warning(e.getMessage());         
         }
+    }
+
+    private File getEnvFile() {
+        File file = null;
+        boolean onZ = System.getProperty("os.name").toLowerCase().contains(ZOS);
+    
+        // Allow system setting to override env file location and name
+        String valueEnvFile = System.getProperty(ENV_FILE);
+        logger.info(ENV_FILE + " is set to " + valueEnvFile);
+
+        if (null != valueEnvFile) {
+        } else if (onZ) {
+            logger.info("Running on z/OS");
+            valueEnvFile = DEFAULT_Z_ENV_FILE;
+        } else {
+            valueEnvFile = DEFAULT_ENV_FILE;
+        }
+
+        logger.info("Looking for environment file " + valueEnvFile);
+
+        file = new File(valueEnvFile);
+        if (! file.exists()){
+            logger.warning("Environment settings " + valueEnvFile + " file not found");
+            logger.warning("As a minimum a queue manager, queue and CCDT will be required");
+            logger.warning("If not provided then the application will throw an exception");
+            file = null;
+        }       
+        return file;     
     }
 
     public String getEnvValue(String key, int index) {
         JSONObject mqAppEnv = null;
-        String value = System.getenv(key);
+        String value = System.getProperty(key);
 
-        if ((value == null || value.isEmpty()) &&
-                   mqEndPoints != null &&
-                   ! mqEndPoints.isEmpty()) {
-            mqAppEnv = (JSONObject) mqEndPoints.get(index);
-            value = (String) mqAppEnv.get(key);
+        try {
+            if ((value == null || value.isEmpty()) &&
+                        mqEndPoints != null &&
+                        ! mqEndPoints.isEmpty()) {
+                mqAppEnv = (JSONObject) mqEndPoints.get(index);
+                value = (String) mqAppEnv.get(key);
+            }
+        } catch (JSONException e) {
+          logger.warning("Error looking for json key " + key);
+          logger.warning(e.getMessage());         
         }
 
         if (! key.contains("PASSWORD")) {
@@ -88,41 +130,109 @@ public class SampleEnvSetter {
         return value;
     }
 
+    public String getEnvValueOrDefault(String key, String defaultValue, int index) {
+        String value = getEnvValue(key, index);
+
+        return (null == value || value.trim().isEmpty()) 
+                        ? defaultValue
+                        : value;
+    }
+
+    public int getPortEnvValue(String key, int index) {
+        int value = DEFAULT_MQI_PORT;
+        try {
+            value = Integer.parseInt(this.getEnvValue(key, index));
+        } catch (NumberFormatException e) {
+            logger.warning("Unable to parse a number for port ");
+            logger.warning("defaulting port to " + DEFAULT_MQI_PORT);
+        } 
+        return value;
+    }
+
+    public Boolean getEnvBooleanValue(String key, int index) {
+      JSONObject mqAppEnv = null;
+
+      Boolean value = Boolean.getBoolean(key);
+
+      try {
+          if (!value && mqEndPoints != null &&
+                          ! mqEndPoints.isEmpty()) {
+              mqAppEnv = (JSONObject) mqEndPoints.get(index);
+              value = (Boolean) mqAppEnv.getBoolean(key);
+              if (value == null) {
+                value = false;
+              }
+          }
+      } catch (JSONException e) {
+        logger.warning("Error looking for json key " + key);
+        logger.warning(e.getMessage());         
+      }
+
+      logger.info("returning " + value + " for key " + key);
+
+      return value;
+    }    
+
+    public Long getEnvLongValue(String key, int index) {
+        JSONObject mqAppEnv = null;
+        Long value = Long.getLong(key,0L);
+
+        try {
+            if (value <= 0L && mqEndPoints != null &&
+                            ! mqEndPoints.isEmpty()) {
+                mqAppEnv = (JSONObject) mqEndPoints.get(index);
+                value = (Long) mqAppEnv.getLong(key);
+                if (value == null) {
+                  value = 0L;
+                }
+            }
+        } catch (JSONException e) {
+          logger.warning("Error looking for json key " + key);
+          logger.warning(e.getMessage());         
+        }
+  
+        logger.info("returning " + value + " for key " + key);
+
+        return value;
+    }
+
     public String getCheckForCCDT() {
-        String value = System.getenv(CCDT);
+        String value = System.getProperty(CCDT);
 
         if (value != null && ! value.isEmpty()) {
-          String ccdtFile = value;
-          if (ccdtFile.startsWith(FILEPREFIX)) {
-            ccdtFile = ccdtFile.split(FILEPREFIX)[1];
-            logger.info("Checking for existance of file " + ccdtFile);
+            String ccdtFile = value;
+            if (ccdtFile.startsWith(FILEPREFIX)) {
+                ccdtFile = ccdtFile.split(FILEPREFIX)[1];
+                logger.info("Checking for existance of file " + ccdtFile);
 
-            File tmp = new File(ccdtFile);
-            if (! tmp.exists()) {
-              value = null;
+                File tmp = new File(ccdtFile);
+                if (! tmp.exists()) {
+                    logger.info("CCDT file not found");
+                    value = null;
+                } 
             }
-
-          }
         }
         return value;
     }
 
     public String getConnectionString() {
-      List<String> coll = new ArrayList<String>();
+        List<String> coll = new ArrayList<String>();
 
-      for (Object o : mqEndPoints) {
-        JSONObject jo = (JSONObject) o;
-        String s = (String) jo.get("HOST") + "(" + (String) jo.get("PORT") + ")";
-        coll.add(s);
-      }
+        for (Object o : mqEndPoints) {
+            JSONObject jo = (JSONObject) o;
+            String s = (String) jo.get("HOST") + "(" + (String) jo.get("PORT") + ")";
+            coll.add(s);
+        }
 
-      String connString = String.join(",", coll);
-      logger.info("Connection string will be " + connString);
+        String connString = String.join(",", coll);
+        logger.info("Connection string will be " + connString);
 
-      return connString;
+        return connString;
     }
 
     public int getCount() {
-      return mqEndPoints.size();
+        // If there are no endpoints, then values 
+        // need to come from a CCDT and environment settings
+        return (null == mqEndPoints) ? 1 : mqEndPoints.length();
     }
 }

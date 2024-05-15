@@ -1,5 +1,5 @@
 /*
- * (c) Copyright IBM Corporation 2021
+ * (c) Copyright IBM Corporation 2021, 2023
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,8 @@ import org.springframework.jms.config.DefaultJmsListenerContainerFactory;
 import org.springframework.jms.config.JmsListenerContainerFactory;
 import org.springframework.jms.support.QosSettings;
 
-import javax.jms.ConnectionFactory;
-import javax.jms.DeliveryMode;
+import jakarta.jms.ConnectionFactory;
+import jakarta.jms.DeliveryMode;
 
 @Configuration
 public class MQConfiguration108 {

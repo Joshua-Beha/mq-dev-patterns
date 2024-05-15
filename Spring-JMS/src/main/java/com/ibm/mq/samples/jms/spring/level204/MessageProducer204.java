@@ -1,5 +1,5 @@
 /*
- * (c) Copyright IBM Corporation 2021
+ * (c) Copyright IBM Corporation 2021, 2024
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.stereotype.Component;
 
-import javax.jms.ConnectionFactory;
+import jakarta.jms.ConnectionFactory;
 
 //@Component
 public class MessageProducer204 {
@@ -47,7 +47,7 @@ public class MessageProducer204 {
 
     @Bean
     public IntegrationFlow myOurDataFlow() {
-        return IntegrationFlows.from(MessageChannels.direct("ourdatainput"))
+        return IntegrationFlow.from(MessageChannels.direct("ourdatainput"))
                 .log()
                 .transform(Transformers.toJson())
                 .log()

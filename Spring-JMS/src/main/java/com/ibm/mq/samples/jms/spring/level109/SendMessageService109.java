@@ -1,5 +1,5 @@
 /*
- * (c) Copyright IBM Corporation 2021
+ * (c) Copyright IBM Corporation 2021, 2023
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import org.apache.commons.logging.LogFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import javax.jms.*;
+import jakarta.jms.*;
 
 
 @Service

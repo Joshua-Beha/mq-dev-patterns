@@ -1,5 +1,5 @@
 /**
- * Copyright 2022, 2023 IBM Corp.
+ * Copyright 2022, 2024 IBM Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the 'License');
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,12 @@ import { Button } from '@carbon/react';
 import { Handle } from 'react-flow-renderer';
 import APIAdapter from '../../adapters/API.adapter';
 import useStore from '../MQPatterns/RequestResponse/store';
-import NumberInput from '@carbon/react/lib/components/NumberInput/NumberInput';
+import {NumberInput} from '@carbon/react';
 import './map.css';
 import FormLabel from '@carbon/react/lib/components/FormLabel/FormLabel';
 import TextInput from '@carbon/react/lib/components/TextInput';
 import { toast } from 'react-toastify';
+import Cookies from 'js-cookie';
 
 const RequestorNode = ({ id, data }) => {
   const adapter = new APIAdapter();
@@ -42,8 +43,12 @@ const RequestorNode = ({ id, data }) => {
   const [tmpQueueName, setTmpQueueName] = useState();
   const [isWaitingForReply, setIsWaitingForReply] = useState(false);
   const [responseMessage, setResponseMessage] = useState();
+  const [sessionID, setSessionID] = useState();
 
   useEffect(() => {
+    let _sessionID = Cookies.get("sessionID");        
+    setSessionID(_sessionID);
+    
     if (animationState) {
       setTimeout(() => {
         animateConnection(id, false);
@@ -81,7 +86,7 @@ const RequestorNode = ({ id, data }) => {
       let message = 'Request';
       // Adapter DYNPUT
       adapter
-        .dynPut(message, 1, data.connectedQueue, 'DYNPUT', id)
+        .dynPut(message, 1, data.connectedQueue, 'DYNPUT', id, sessionID)
         .then(res => {
           //Drow the TMP queue && starting pulling the TMP queue waiting for the response
           if (res !== -1) {
@@ -100,7 +105,7 @@ const RequestorNode = ({ id, data }) => {
   };
 
   const handleOnChange = (e, value) => {
-    var delta = value === 'up' ? 1 : -1;
+    var delta = value.direction === 'up' ? 1 : -1;
     setQuantity(quantity + delta);
   };
 

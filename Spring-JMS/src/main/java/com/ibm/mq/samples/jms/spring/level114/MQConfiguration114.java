@@ -1,5 +1,5 @@
 /*
- * (c) Copyright IBM Corporation 2021
+ * (c) Copyright IBM Corporation 2021, 2024
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package com.ibm.mq.samples.jms.spring.level114;
 
-import com.ibm.mq.jms.MQConnectionFactory;
+import com.ibm.mq.jakarta.jms.MQConnectionFactory;
 import com.ibm.mq.samples.jms.spring.globals.handlers.OurDestinationResolver;
 import com.ibm.mq.samples.jms.spring.globals.handlers.OurMessageConverter;
 import com.ibm.mq.spring.boot.MQConfigurationProperties;
@@ -31,8 +31,8 @@ import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.support.QosSettings;
 
 
-import javax.jms.DeliveryMode;
-import javax.jms.JMSException;
+import jakarta.jms.DeliveryMode;
+import jakarta.jms.JMSException;
 
 //@Configuration
 public class MQConfiguration114 {

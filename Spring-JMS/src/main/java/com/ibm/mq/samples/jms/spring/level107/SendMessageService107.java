@@ -1,5 +1,5 @@
 /*
- * (c) Copyright IBM Corporation 2021
+ * (c) Copyright IBM Corporation 2021, 2023
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package com.ibm.mq.samples.jms.spring.level107;
 
-import com.ibm.jms.JMSTextMessage;
+import com.ibm.jakarta.jms.JMSTextMessage;
 import com.ibm.mq.samples.jms.spring.globals.Constants;
 import com.ibm.mq.samples.jms.spring.globals.data.OurData;
 import com.ibm.mq.samples.jms.spring.globals.data.ReplyData;
@@ -28,10 +28,10 @@ import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessageCreator;
 import org.springframework.stereotype.Service;
 
-import javax.jms.DeliveryMode;
-import javax.jms.JMSException;
-import javax.jms.Message;
-import javax.jms.Session;
+import jakarta.jms.DeliveryMode;
+import jakarta.jms.JMSException;
+import jakarta.jms.Message;
+import jakarta.jms.Session;
 import java.util.UUID;
 
 

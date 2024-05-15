@@ -1,5 +1,5 @@
 /*
-* Copyright 2018, 2022 IBM Corp.
+* (c) Copyright IBM Corporation 2019, 2024
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 package com.ibm.mq.samples.jms;
 
 import java.util.logging.*;
+
+// Use these imports for building with JMS
 import javax.jms.Destination;
 import javax.jms.JMSConsumer;
 import javax.jms.JMSContext;
@@ -30,15 +32,38 @@ import javax.jms.DeliveryMode;
 import com.ibm.msg.client.jms.JmsConnectionFactory;
 import com.ibm.msg.client.jms.JmsFactoryFactory;
 import com.ibm.msg.client.wmq.WMQConstants;
+import com.ibm.msg.client.jms.DetailedInvalidDestinationException;
+import com.ibm.msg.client.jms.DetailedInvalidDestinationRuntimeException;
+
+import com.ibm.mq.jms.MQDestination;
+
+// Use these imports for building with Jakarta Messaging
+// import jakarta.jms.Destination;
+// import jakarta.jms.JMSConsumer;
+// import jakarta.jms.JMSContext;
+// import jakarta.jms.JMSException;
+// import jakarta.jms.JMSProducer;
+// import jakarta.jms.Message;
+// import jakarta.jms.TextMessage;
+// import jakarta.jms.JMSRuntimeException;
+// import jakarta.jms.DeliveryMode;
+
+// import com.ibm.msg.client.jakarta.jms.JmsConnectionFactory;
+// import com.ibm.msg.client.jakarta.jms.JmsFactoryFactory;
+// import com.ibm.msg.client.jakarta.wmq.WMQConstants;
+// import com.ibm.msg.client.jakarta.jms.DetailedInvalidDestinationException;
+// import com.ibm.msg.client.jakarta.jms.DetailedInvalidDestinationRuntimeException;
+
+// import com.ibm.mq.jakarta.jms.MQDestination;
+
 import com.ibm.mq.constants.MQConstants;
 import com.ibm.mq.MQException;
-import com.ibm.msg.client.jms.DetailedInvalidDestinationException;
-import com.ibm.mq.jms.MQDestination;
+
 
 import com.ibm.mq.samples.jms.SampleEnvSetter;
 
 public class JmsResponse {
-
+    private static final String DEFAULT_APP_NAME = "Dev Experience JmsResponse";
     private static final Level LOGLEVEL = Level.ALL;
     private static final Logger logger = Logger.getLogger("com.ibm.mq.samples.jms");
 
@@ -48,10 +73,16 @@ public class JmsResponse {
     private static String QMGR; // Queue manager name
     private static String APP_USER; // User name that application uses to connect to MQ
     private static String APP_PASSWORD; // Password that the application uses to connect to MQ
+    private static String APP_NAME; // Application Name that the application uses
     private static String QUEUE_NAME; // Queue that the application uses to put and get messages to and from
     private static String CIPHER_SUITE;
     private static String CCDTURL;
     private static String BACKOUT_QUEUE;
+    private static Boolean BINDINGS = false;
+    private static Long RESPONDER_INACTIVITY_TIMEOUT = 0L;
+
+    private static Long SECOND = 1000L;
+    private static Long HOUR = 60 * 60 * SECOND; 
 
     public static void main(String[] args) {
         System.setProperty("javax.net.ssl.trustStoreType", "jks");
@@ -61,8 +92,21 @@ public class JmsResponse {
 
         initialiseLogging();
         mqConnectionVariables();
-        logger.info("Put application is starting");
+        logger.info("Response application is starting");
+    
+        try {
+            runResponseApplication();
+        } catch (DetailedInvalidDestinationRuntimeException e) {
+            logger.warning("Looks like queue name is invalid");
+            logger.warning(e.getMessage());
+        } catch (Exception e) {
+            logger.warning("Got an exception");
+            logger.warning("Exception class Name " + e.getClass().getSimpleName());
+            logger.warning(e.getMessage());
+        }
+    }
 
+    private static void runResponseApplication() {
         JMSContext context;
         Destination destination;
         JMSConsumer consumer;
@@ -73,19 +117,32 @@ public class JmsResponse {
 
         context = connectionFactory.createContext(JMSContext.SESSION_TRANSACTED);
 
+
         logger.info("context created");
         destination = context.createQueue("queue:///" + QUEUE_NAME);
         logger.info("destination created");
         consumer = context.createConsumer(destination);
         logger.info("consumer created");
 
-       while (true) {
+        while (true) {
             try {
+                Message receivedMessage = null;
                 // getting the message from the requestor
-                Message receivedMessage = consumer.receive();
+                if (0 < RESPONDER_INACTIVITY_TIMEOUT) {
+                    logger.info("Responder waiting for " + RESPONDER_INACTIVITY_TIMEOUT + " milliseconds for next request");
+                    receivedMessage = consumer.receive(RESPONDER_INACTIVITY_TIMEOUT); 
+                    if (null == receivedMessage) {
+                        logger.info("Timed out with no requests received");
+                        logger.info("Terminating responder");
+                        break;
+                    }
+                } else {
+                    receivedMessage = consumer.receive();
+                }
+                logger.info("Checking message type");
 
-                long extractedValue = getAndDisplayMessageBody(receivedMessage);
-                replyToMessage(context, receivedMessage, extractedValue);
+                getAndDisplayMessageBody(receivedMessage);
+                replyToMessage(context, receivedMessage);
             } catch (JMSRuntimeException jmsex) {
 
                 jmsex.printStackTrace();
@@ -97,38 +154,52 @@ public class JmsResponse {
         }
     }
 
-    private static void replyToMessage(JMSContext context, Message receivedMessage, long extractedValue) {
+    private static void replyToMessage(JMSContext context, Message receivedMessage) {
+        logger.info("Preparing reply to message");
         boolean ok=true;
         try {
+            String requestObject = null;
+            if (receivedMessage instanceof TextMessage) {
+                TextMessage textMessage = (TextMessage) receivedMessage;
+                requestObject = textMessage.getText();
+            }
+
             if (receivedMessage instanceof Message) {
 
                 Destination destination = receivedMessage.getJMSReplyTo();
                 String correlationID = receivedMessage.getJMSCorrelationID();   
                 
-            
-                //throw new JMSRuntimeException("Error on reading the message");
-               
-                TextMessage message = context.createTextMessage(RequestCalc.buildStringForRequest(extractedValue));
+                TextMessage message = context.createTextMessage(RequestResponseHelper.buildStringForResponse(requestObject));
                 message.setJMSCorrelationID(correlationID);
-                JMSProducer producer = context.createProducer();
 
                 // Make sure message put on a reply queue is non-persistent so non XMS/JMS apps
                 // can get the message off the temp reply queue
-                producer.setDeliveryMode(DeliveryMode.NON_PERSISTENT);
-                producer.send(destination, message);                       
+                // Reply will expire in an hour if not retrieved by the requester
+
+                context.createProducer()
+                    .setDeliveryMode(DeliveryMode.NON_PERSISTENT)
+                    .setTimeToLive(HOUR)
+                    .send(destination, message);                       
                 context.commit();
                 
             }
-        } catch (JMSException jmsex) {
-            
-            logger.info("******** JMS Exception*********************");
+            logger.info("Reply has been sent");
+        } catch (JMSException jmsex) {    
+            logger.info("JMS Exception caught");
 
-            if (null != jmsex.getCause() && jmsex.getCause() instanceof MQException) {
-                MQException innerException = (MQException) jmsex.getCause();
+            Throwable cause = jmsex.getCause();
 
-                if (MQConstants.MQRC_UNKNOWN_OBJECT_NAME == innerException.getReason()) {
-                    ok = false;
-                    logger.info("Reply to Queue no longer exists, skipping request");
+            if (null != cause && cause instanceof MQException) {
+                MQException innerException = (MQException) cause;
+                int reason = innerException.getReason();
+
+                switch(innerException.getReason()) {
+                    case MQConstants.MQRC_UNKNOWN_OBJECT_NAME:
+                        logger.info("Reply to Queue no longer exists, skipping request");
+                        break;
+                    case MQConstants.MQRC_CONNECTION_BROKEN:
+                        logger.info("MQ Connection has broken");
+                        break;                    
                 }
             }
             
@@ -137,27 +208,33 @@ public class JmsResponse {
            // jmsex.printStackTrace();
 
         } catch (JMSRuntimeException jmsex) {
-          // Get this exception when the message does not have a reply to queue.
-          if (null != jmsex.getCause()) {
-              MQException e = findMQException(jmsex);
-              if (null != e && e instanceof MQException) {
-                  if (MQConstants.MQRC_UNKNOWN_OBJECT_NAME == e.getReason()) {
-                      logger.info("Reply to Queue no longer exists, skipping request");
-                      ok = false;                      
-                  }
-              }
-          }
+            logger.info("JMSRuntimeException caught");
+            // Get this exception when the message does not have a reply to queue.
+            if (null != jmsex.getCause()) {
+                MQException e = findMQException(jmsex);
+                if (null != e && e instanceof MQException) {
+                    if (MQConstants.MQRC_UNKNOWN_OBJECT_NAME == e.getReason()) {
+                        logger.info("Reply to Queue no longer exists, skipping request");
+                        ok = false;                      
+                    }
+                }
+            }
 
-          // Get this exception when the reply to queue is no longer valid.
-          // eg. When app that posted the message is no longer running.
-          if (null != jmsex.getCause() && jmsex.getCause() instanceof DetailedInvalidDestinationException) {
-            logger.info("Reply to destination is invalid");
-            ok = false;          
-          }   
+            // Get this exception when the reply to queue is no longer valid.
+            // eg. When app that posted the message is no longer running.
+            if (null != jmsex.getCause() && jmsex.getCause() instanceof DetailedInvalidDestinationException) {
+                logger.info("Reply to destination is invalid");
+                ok = false;          
+            }   
 
-          logger.warning("Unexpected runtime error");
-          ok = false;
-          //jmsex.printStackTrace();
+            logger.warning("Unexpected runtime error");
+            ok = false;
+            //jmsex.printStackTrace();
+        } catch (Exception e) {
+            logger.warning("Got an unexpected exception");
+            logger.warning("Exception class Name " + e.getClass().getSimpleName());
+            logger.warning(e.getMessage());
+            ok = false;
         }
 
         if (!ok) {
@@ -167,39 +244,47 @@ public class JmsResponse {
     }
 
     private static void rollbackOrPause(JMSContext context, Message message) {
-        int counter = -1;
+        int backoutCounter = -1;
+        int backoutThreshold = 5;
 
         try {
-            counter = Integer.parseInt(message.getStringProperty("JMSXDeliveryCount"));
-            logger.info("Current counter" + String.valueOf(counter));
+            backoutCounter = Integer.parseInt(message.getStringProperty("JMSXDeliveryCount"));
+            logger.info("Current counter " + String.valueOf(backoutCounter));
         } catch (Exception e) {
             logger.info("Error on getting the counter");
             return;
         }
 
-        if(counter < 5) {
+        if(backoutCounter < backoutThreshold) {
+            logger.warning("rolling back the message");
             context.rollback();
         } else {
+            logger.warning("Retry rate has been exceeded");
+            logger.warning("Attempting to backout the message");
             redirectToAnotherQueue(context, message);
         }      
     }
 
     private static void redirectToAnotherQueue(JMSContext context, Message message) {
+        if (null == BACKOUT_QUEUE || BACKOUT_QUEUE.isEmpty()) {
+            logger.warning("backout queue has not been supplied");
+            logger.warning("message may cause poison message situation");
+            context.commit();
+            return;
+        }
         logger.info("Redirecting to "+ BACKOUT_QUEUE);
         Destination dest = context.createQueue("queue:///" + BACKOUT_QUEUE);
         JMSProducer producer = context.createProducer();
         producer.send(dest, message);
-        logger.info("Message sent to backup queue" + BACKOUT_QUEUE + " correctly");
+        logger.info("Message sent to backout queue" + BACKOUT_QUEUE + " correctly");
         context.commit();
     }
 
-    private static long getAndDisplayMessageBody(Message receivedMessage) {
-        long responseValue = 0;
+    private static void getAndDisplayMessageBody(Message receivedMessage) {
         if (receivedMessage instanceof TextMessage) {
             TextMessage textMessage = (TextMessage) receivedMessage;
             try {
-                logger.info("Request message was" + textMessage.getText());
-                responseValue = RequestCalc.requestIntegerSquared(textMessage.getText());
+                logger.info("Request message was " + textMessage.getText());
             } catch (JMSException jmsex) {
                 recordFailure(jmsex);
             }
@@ -208,7 +293,6 @@ public class JmsResponse {
         } else {
             logger.info("Received object not of JMS Message type!\n");
         }
-        return responseValue;
     }
 
     // recurse on the inner exceptions looking for a MQException.
@@ -228,23 +312,46 @@ public class JmsResponse {
     private static void mqConnectionVariables() {
         SampleEnvSetter env = new SampleEnvSetter();
         int index = 0;
-        ConnectionString = env.getConnectionString();
+
+        CCDTURL = env.getCheckForCCDT();
+
+        // If the CCDT is in use then a connection string will 
+        // not be needed.
+        if (null == CCDTURL) {
+            ConnectionString = env.getConnectionString();
+        }
+
         CHANNEL = env.getEnvValue("CHANNEL", index);
         QMGR = env.getEnvValue("QMGR", index);
         APP_USER = env.getEnvValue("APP_USER", index);
         APP_PASSWORD = env.getEnvValue("APP_PASSWORD", index);
+        APP_NAME = env.getEnvValueOrDefault("APP_NAME", DEFAULT_APP_NAME, index);
         QUEUE_NAME = env.getEnvValue("QUEUE_NAME", index);
         CIPHER_SUITE = env.getEnvValue("CIPHER_SUITE", index);
+        BINDINGS = env.getEnvBooleanValue("BINDINGS", index);
         BACKOUT_QUEUE = env.getEnvValue("BACKOUT_QUEUE", index);
-        if(BACKOUT_QUEUE.isEmpty()) { logger.info("Missing BACKOUT_QUEUE value"); }
-        CCDTURL = env.getCheckForCCDT();
+        RESPONDER_INACTIVITY_TIMEOUT = env.getEnvLongValue("RESPONDER_INACTIVITY_TIMEOUT", index);
+
+        // TIMEOUT in receive is in milliseconds, a value of 5 will be converted to 
+        // 5000 milliseconds = 5 seconds.
+        if (0 < RESPONDER_INACTIVITY_TIMEOUT) {
+            RESPONDER_INACTIVITY_TIMEOUT *= 1000;
+        }
+
+        if ( BACKOUT_QUEUE == null || BACKOUT_QUEUE.isEmpty() ) { 
+            logger.info("Missing BACKOUT_QUEUE value"); 
+        }
     }
 
     private static JmsConnectionFactory createJMSConnectionFactory() {
         JmsFactoryFactory ff;
         JmsConnectionFactory cf;
         try {
+            // JMS
             ff = JmsFactoryFactory.getInstance(WMQConstants.WMQ_PROVIDER);
+            // Jakarta
+            // ff = JmsFactoryFactory.getInstance(WMQConstants.JAKARTA_WMQ_PROVIDER);
+
             cf = ff.createConnectionFactory();
         } catch (JMSException jmsex) {
             recordFailure(jmsex);
@@ -257,17 +364,35 @@ public class JmsResponse {
         try {
             if (null == CCDTURL) {
                 cf.setStringProperty(WMQConstants.WMQ_CONNECTION_NAME_LIST, ConnectionString);
-                cf.setStringProperty(WMQConstants.WMQ_CHANNEL, CHANNEL);
+                
+                if (null == CHANNEL && !BINDINGS) {
+                    logger.warning("When running in client mode, either channel or CCDT must be provided");
+                } else if (null != CHANNEL) {
+                    cf.setStringProperty(WMQConstants.WMQ_CHANNEL, CHANNEL);
+                }
+                
             } else {
                 logger.info("Will be making use of CCDT File " + CCDTURL);
                 cf.setStringProperty(WMQConstants.WMQ_CCDTURL, CCDTURL);
+
+                // Set the WMQ_CLIENT_RECONNECT_OPTIONS property to allow 
+                // the MQ JMS classes to attempt a reconnect 
+                // cf.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_OPTIONS, WMQConstants.WMQ_CLIENT_RECONNECT);
             }
-            cf.setIntProperty(WMQConstants.WMQ_CONNECTION_MODE, WMQConstants.WMQ_CM_CLIENT);
+
+            if (BINDINGS) {
+                cf.setIntProperty(WMQConstants.WMQ_CONNECTION_MODE, WMQConstants.WMQ_CM_BINDINGS);
+            } else {
+                cf.setIntProperty(WMQConstants.WMQ_CONNECTION_MODE, WMQConstants.WMQ_CM_CLIENT);
+            }
+
             cf.setStringProperty(WMQConstants.WMQ_QUEUE_MANAGER, QMGR);
-            cf.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, "JmsBasicResponse (JMS)");
-            cf.setBooleanProperty(WMQConstants.USER_AUTHENTICATION_MQCSP, true);
-            cf.setStringProperty(WMQConstants.USERID, APP_USER);
-            cf.setStringProperty(WMQConstants.PASSWORD, APP_PASSWORD);
+            cf.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, APP_NAME);
+            if (null != APP_USER && !APP_USER.trim().isEmpty()) {
+                cf.setBooleanProperty(WMQConstants.USER_AUTHENTICATION_MQCSP, true);
+                cf.setStringProperty(WMQConstants.USERID, APP_USER);
+                cf.setStringProperty(WMQConstants.PASSWORD, APP_PASSWORD);
+            }
             if (CIPHER_SUITE != null && !CIPHER_SUITE.isEmpty()) {
                 cf.setStringProperty(WMQConstants.WMQ_SSL_CIPHER_SUITE, CIPHER_SUITE);
             }
@@ -278,28 +403,7 @@ public class JmsResponse {
     }
 
     private static void recordFailure(Exception ex) {
-        if (ex != null) {
-            if (ex instanceof JMSException) {
-                processJMSException((JMSException) ex);
-            } else {
-                logger.warning(ex.getMessage());
-            }
-        }
-        logger.info("FAILURE");
-        return;
-    }
-
-    private static void processJMSException(JMSException jmsex) {
-        logger.info(jmsex.getMessage());
-        Throwable innerException = jmsex.getLinkedException();
-        logger.info("Exception is: " + jmsex);
-        if (innerException != null) {
-            logger.info("Inner exception(s):");
-        }
-        while (innerException != null) {
-            logger.warning(innerException.getMessage());
-            innerException = innerException.getCause();
-        }
+        JmsExceptionHelper.recordFailure(logger,ex);
         return;
     }
 

@@ -1,5 +1,5 @@
 /*
-* (c) Copyright IBM Corporation 2019
+* (c) Copyright IBM Corporation 2019, 2023
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package com.ibm.mq.samples.jms;
 
 import java.util.logging.*;
 
+// Use these imports for building with JMS
 import javax.jms.Destination;
 import javax.jms.JMSProducer;
 import javax.jms.JMSContext;
@@ -32,9 +33,26 @@ import com.ibm.msg.client.wmq.WMQConstants;
 
 import com.ibm.mq.jms.MQDestination;
 
+// Use these imports for building with Jakarta Messaging
+// import jakarta.jms.Destination;
+// import jakarta.jms.JMSProducer;
+// import jakarta.jms.JMSContext;
+// import jakarta.jms.Message;
+// import jakarta.jms.TextMessage;
+// import jakarta.jms.JMSRuntimeException;
+// import jakarta.jms.JMSException;
+
+// import com.ibm.msg.client.jakarta.jms.JmsConnectionFactory;
+// import com.ibm.msg.client.jakarta.jms.JmsFactoryFactory;
+// import com.ibm.msg.client.jakarta.wmq.WMQConstants;
+
+// import com.ibm.mq.jakarta.jms.MQDestination;
+
 import com.ibm.mq.samples.jms.SampleEnvSetter;
 
 public class JmsPub {
+  private static final String DEFAULT_APP_NAME = "Dev Experience JmsPub";
+
   private static final Level LOGLEVEL = Level.ALL;
   private static final Logger logger = Logger.getLogger("com.ibm.mq.samples.jms");
 
@@ -44,10 +62,12 @@ public class JmsPub {
   private static String QMGR; // Queue manager name
   private static String APP_USER; // User name that application uses to connect to MQ
   private static String APP_PASSWORD; // Password that the application uses to connect to MQ
+  private static String APP_NAME; // Application Name that the application uses
   private static String TOPIC_NAME; // Topic that the application publishes to
   private static String PUBLICATION_NAME = "JmsPub - SamplePublisher"; //
   private static String CIPHER_SUITE;
   private static String CCDTURL;
+  private static Boolean BINDINGS = false;
 
   public static void main(String[] args) {
     initialiseLogging();
@@ -99,22 +119,33 @@ public class JmsPub {
     SampleEnvSetter env = new SampleEnvSetter();
     int index = 0;
 
-    ConnectionString = env.getConnectionString();
+    CCDTURL = env.getCheckForCCDT();
+
+    // If the CCDT is in use then a connection string will 
+    // not be needed.
+    if (null == CCDTURL) {
+        ConnectionString = env.getConnectionString();
+    }
+
     CHANNEL = env.getEnvValue("CHANNEL", index);
     QMGR = env.getEnvValue("QMGR", index);
     APP_USER = env.getEnvValue("APP_USER", index);
     APP_PASSWORD = env.getEnvValue("APP_PASSWORD", index);
+    APP_NAME = env.getEnvValueOrDefault("APP_NAME", DEFAULT_APP_NAME, index);
     TOPIC_NAME = env.getEnvValue("TOPIC_NAME", index);
     CIPHER_SUITE = env.getEnvValue("CIPHER_SUITE", index);
-
-    CCDTURL = env.getCheckForCCDT();
+    BINDINGS = env.getEnvBooleanValue("BINDINGS", index);
   }
 
   private static JmsConnectionFactory createJMSConnectionFactory() {
     JmsFactoryFactory ff;
     JmsConnectionFactory cf;
     try {
+      // JMS
       ff = JmsFactoryFactory.getInstance(WMQConstants.WMQ_PROVIDER);
+      // Jakarta
+      // ff = JmsFactoryFactory.getInstance(WMQConstants.JAKARTA_WMQ_PROVIDER);
+
       cf = ff.createConnectionFactory();
     } catch (JMSException jmsex) {
       recordFailure(jmsex);
@@ -127,18 +158,33 @@ public class JmsPub {
     try {
       if (null == CCDTURL) {
           cf.setStringProperty(WMQConstants.WMQ_CONNECTION_NAME_LIST, ConnectionString);
-          cf.setStringProperty(WMQConstants.WMQ_CHANNEL, CHANNEL);
+          if (null == CHANNEL && !BINDINGS) {
+            logger.warning("When running in client mode, either channel or CCDT must be provided");
+        } else if (null != CHANNEL) {
+            cf.setStringProperty(WMQConstants.WMQ_CHANNEL, CHANNEL);
+        }
       } else {
           logger.info("Will be making use of CCDT File " + CCDTURL);
           cf.setStringProperty(WMQConstants.WMQ_CCDTURL, CCDTURL);
+    
+          // Set the WMQ_CLIENT_RECONNECT_OPTIONS property to allow 
+          // the MQ JMS classes to attempt a reconnect 
+          // cf.setIntProperty(WMQConstants.WMQ_CLIENT_RECONNECT_OPTIONS, WMQConstants.WMQ_CLIENT_RECONNECT);
       }
 
-      cf.setIntProperty(WMQConstants.WMQ_CONNECTION_MODE, WMQConstants.WMQ_CM_CLIENT);
+      if (BINDINGS) {
+        cf.setIntProperty(WMQConstants.WMQ_CONNECTION_MODE, WMQConstants.WMQ_CM_BINDINGS);
+      } else {
+          cf.setIntProperty(WMQConstants.WMQ_CONNECTION_MODE, WMQConstants.WMQ_CM_CLIENT);
+      }
+
       cf.setStringProperty(WMQConstants.WMQ_QUEUE_MANAGER, QMGR);
-      cf.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, "SimplePub (JMS)");
-      cf.setBooleanProperty(WMQConstants.USER_AUTHENTICATION_MQCSP, true);
-      cf.setStringProperty(WMQConstants.USERID, APP_USER);
-      cf.setStringProperty(WMQConstants.PASSWORD, APP_PASSWORD);
+      cf.setStringProperty(WMQConstants.WMQ_APPLICATIONNAME, APP_NAME);
+      if (null != APP_USER && !APP_USER.trim().isEmpty()) {
+        cf.setBooleanProperty(WMQConstants.USER_AUTHENTICATION_MQCSP, true);
+        cf.setStringProperty(WMQConstants.USERID, APP_USER);
+        cf.setStringProperty(WMQConstants.PASSWORD, APP_PASSWORD);
+      }
       cf.setStringProperty(WMQConstants.CLIENT_ID, PUBLICATION_NAME);
       if (CIPHER_SUITE != null && !CIPHER_SUITE.isEmpty()) {
         cf.setStringProperty(WMQConstants.WMQ_SSL_CIPHER_SUITE, CIPHER_SUITE);
@@ -159,28 +205,7 @@ public class JmsPub {
   }
 
   private static void recordFailure(Exception ex) {
-    if (ex != null) {
-      if (ex instanceof JMSException) {
-        processJMSException((JMSException) ex);
-      } else {
-        logger.info(ex.getMessage());
-      }
-    }
-    logger.warning("FAILURE");
-    return;
-  }
-
-  private static void processJMSException(JMSException jmsex) {
-    logger.info(jmsex.getMessage());
-    Throwable innerException = jmsex.getLinkedException();
-    logger.info("Exception is: " + jmsex);
-    if (innerException != null) {
-      logger.info("Inner exception(s):");
-    }
-    while (innerException != null) {
-      logger.warning(innerException.getMessage());
-      innerException = innerException.getCause();
-    }
+    JmsExceptionHelper.recordFailure(logger,ex);
     return;
   }
 

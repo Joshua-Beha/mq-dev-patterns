@@ -1,5 +1,5 @@
 /*
- * (c) Copyright IBM Corporation 2021
+ * (c) Copyright IBM Corporation 2021, 2024
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package com.ibm.mq.samples.jms.spring.level105;
 
-import javax.jms.*;
+import jakarta.jms.*;
 
 import com.ibm.mq.samples.jms.spring.globals.Constants;
 import com.ibm.mq.samples.jms.spring.globals.data.OurData;
@@ -25,7 +25,7 @@ import com.ibm.mq.samples.jms.spring.globals.utils.MessageUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.jms.annotation.JmsListener;
-
+import org.springframework.stereotype.Component;
 import java.io.Serializable;
 
 
