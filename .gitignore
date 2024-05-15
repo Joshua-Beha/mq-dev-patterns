@@ -15,5 +15,5 @@ amqp-vertx/target/*
 .terraform/
 terraform.tfstate.*
 terraform.tfstate
-
+keys/*
 
