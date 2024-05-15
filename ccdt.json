@@ -8,7 +8,7 @@
                 "connection":
                 [
                     {
-                        "host": "secureqm-ibm-mq-qm-ibm-mq-test.apps.lzocp1.pok.stglabs.ibm.com",
+                        "host": "mq-agent-test.apps.lzocp1.pok.stglabs.ibm.com",
                         "port": 443
                     }
                 ],
@@ -20,5 +20,6 @@
             },
             "type": "clientConnection"
         }
-   ]
-}
+    ]
+    }
+    

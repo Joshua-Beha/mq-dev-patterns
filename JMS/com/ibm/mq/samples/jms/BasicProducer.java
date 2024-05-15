@@ -50,7 +50,7 @@ public class BasicProducer {
 
     public BasicProducer(String type) {
         System.setProperty("javax.net.ssl.trustStoreType", "jks");
-        System.setProperty("javax.net.ssl.trustStore", "/Users/joshuabeha/Documents/HCIT/payment-processor-app/keys/clientkey.jks");
+        System.setProperty("javax.net.ssl.trustStore", "/Users/joshuabeha/Documents/HCIT/mq-dev-patterns/keys/mq-agent-keys/clientkey.jks");
         System.setProperty("javax.net.ssl.trustStorePassword", "testing");
 
         String id = null;

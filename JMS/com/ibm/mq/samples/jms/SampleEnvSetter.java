@@ -39,7 +39,7 @@ public class SampleEnvSetter {
     private static final int DEFAULT_MQI_PORT = 1414;
 
     public static final String ENV_FILE = "EnvFile";
-    public static final String DEFAULT_ENV_FILE = "../env.json";    
+    public static final String DEFAULT_ENV_FILE = "/Users/joshuabeha/Documents/HCIT/mq-dev-patterns/env.json";    
     public static final String DEFAULT_Z_ENV_FILE ="../env-zbindings.json";
 
     public SampleEnvSetter() {
@@ -53,10 +53,8 @@ public class SampleEnvSetter {
         }
 
         try {
-            JSONParser parser = new JSONParser();
-            String envPath = System.getenv("MQENVURL");
-            Object data = parser.parse(new FileReader(envPath));
-            logger.info("File read");
+            String content = new String(Files.readAllBytes(Paths.get(file.toURI())));
+            mqEnvSettings = new JSONObject(content);
 
             logger.info("File read");
 

@@ -49,6 +49,9 @@ public class BasicConsumer {
     private ConnectionHelper ch = null;
 
     public BasicConsumer(String type, int index) {
+        System.setProperty("javax.net.ssl.trustStoreType", "jks");
+        System.setProperty("javax.net.ssl.trustStore", "/Users/joshuabeha/Documents/HCIT/mq-dev-patterns/keys/mq-agent-keys/clientkey.jks");
+        System.setProperty("javax.net.ssl.trustStorePassword", "testing");
         String id = null;
 
         switch(type){
