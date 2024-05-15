@@ -52,6 +52,11 @@ public class JmsPut {
     private static String CCDTURL;
 
     public static void main(String[] args) {
+        System.setProperty("javax.net.ssl.trustStoreType", "jks");
+        System.setProperty("javax.net.ssl.trustStore", "/Users/joshuabeha/Documents/HCIT/payment-processor-app/keys/clientkey.jks");
+        System.setProperty("javax.net.ssl.trustStorePassword", "testing");
+        System.setProperty("com.ibm.mq.cfg.useIBMCipherMappings", "false");
+
         initialiseLogging();
         mqConnectionVariables();
         logger.info("Put application is starting");

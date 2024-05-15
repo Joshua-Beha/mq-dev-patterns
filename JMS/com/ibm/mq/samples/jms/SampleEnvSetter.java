@@ -44,7 +44,8 @@ public class SampleEnvSetter {
 
         try {
             JSONParser parser = new JSONParser();
-            Object data = parser.parse(new FileReader("../env.json"));
+            String envPath = System.getenv("MQENVURL");
+            Object data = parser.parse(new FileReader(envPath));
             logger.info("File read");
 
             mqEnvSettings = (JSONObject) data;

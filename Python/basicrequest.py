@@ -59,7 +59,7 @@ def connect():
         qmgr.connect_with_options(MQDetails[EnvStore.QMGR],
                                   user=credentials[EnvStore.USER],
                                   password=credentials[EnvStore.PASSWORD],
-                                  opts=options, cd=cd, sco=sco)
+                                  opts=options, sco=sco)
         return qmgr
     except pymqi.MQMIError as e:
         logger.error("Error connecting")

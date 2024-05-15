@@ -44,6 +44,7 @@ class EnvStore(object):
     APP_PASSWORD = 'APP_PASSWORD'
     KEY_REPOSITORY = 'KEY_REPOSITORY'
     CCDT = 'MQCCDTURL'
+    # CCDT = '/Users/joshuabeha/Downloads/ibm-mq-quickstart-ccdt.json'
     CIPHER = 'CIPHER'
     FILEPREFIX = "file://"
 
@@ -146,7 +147,8 @@ class EnvStore(object):
     def ccdtCheck():
         fPath = EnvStore.getEnvValue(EnvStore.CCDT)
         if fPath:
-            ccdtFile = fPath if not fPath.startswith(EnvStore.FILEPREFIX) else fPath[len(EnvStore.FILEPREFIX):]
+            # ccdtFile = fPath if not fPath.startswith(EnvStore.FILEPREFIX) else fPath[len(EnvStore.FILEPREFIX):]
+            ccdtFile = "/Users/joshuabeha/Documents/HCIT/mq-dev-patterns/ccdt.json"
             if os.path.isfile(ccdtFile):
                 logger.info('CCDT file found at %s ' % ccdtFile)
                 return True
